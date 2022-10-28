@@ -57,6 +57,8 @@ void Error_Handler(void);
 /* USER CODE END EFP */
 
 /* Private defines -----------------------------------------------------------*/
+#define MPU9250_NSS_Pin GPIO_PIN_1
+#define MPU9250_NSS_GPIO_Port GPIOC
 #define W25Q128JV_NSS_Pin GPIO_PIN_4
 #define W25Q128JV_NSS_GPIO_Port GPIOA
 /* USER CODE BEGIN Private defines */
