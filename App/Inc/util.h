@@ -2,6 +2,7 @@
 #define UTIL_H
 
 #include <stdio.h>
+#include <stdint.h>
 
 #ifndef NO_DBG
  #define DBG_(FMT, ...) \
@@ -22,5 +23,7 @@
 
 #define MIN(x, y) ((x) < (y) ? (x) : (y))
 #define MAX(x, y) ((x) > (y) ? (x) : (y))
+
+int16_t to_signed_16(uint16_t x);
 
 #endif

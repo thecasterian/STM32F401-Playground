@@ -39,7 +39,10 @@ typedef enum {
 mpu9250_status_t mpu9250_init(mpu9250_t *m, SPI_HandleTypeDef *hspi, GPIO_TypeDef *nss_port, uint16_t nss_pin);
 mpu9250_status_t mpu9250_set_range(mpu9250_t *m, mpu9250_acc_range_t acc_range, mpu9250_gyro_range_t gyro_range);
 
-/* acc: m/s^2, gyro: rad/s */
-mpu9250_status_t mpu9250_read_sensor(mpu9250_t *m, float *acc, float *gyro, float *mag);
+/* Unit: m/s^2. */
+mpu9250_status_t mpu9250_read_acc(mpu9250_t *m, float *acc);
+/* Unit: rad/s. */
+mpu9250_status_t mpu9250_read_gyro(mpu9250_t *m, float *gyro);
+mpu9250_status_t mpu9250_read_mag(mpu9250_t *m, float *mag);
 
 #endif

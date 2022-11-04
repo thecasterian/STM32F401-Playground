@@ -1,9 +1,10 @@
 #include "mpu9250.h"
+#include "timer_wrapper.h"
 #include "util.h"
 
 #define ADC_MAX    32768.0f
 #define G          9.80665f
-#define DEG_TO_RAD 0.0174533f
+#define DEG_TO_RAD 0.01745329252f
 
 #define FLAG_READ_REG (1 << 7)
 
@@ -111,10 +112,9 @@ mpu9250_status_t mpu9250_set_range(mpu9250_t *m, mpu9250_acc_range_t acc_range, 
     return res;
 }
 
-mpu9250_status_t mpu9250_read_sensor(mpu9250_t *m, float *acc, float *gyro, float *mag) {
+mpu9250_status_t mpu9250_read_acc(mpu9250_t *m, float *acc) {
     uint8_t axh, axl, ayh, ayl, azh, azl;
-    uint8_t gxh, gxl, gyh, gyl, gzh, gzl;
-    uint16_t ax, ay, az, gx, gy, gz;
+    uint16_t ax, ay, az;
     mpu9250_status_t res = MPU9250_ERR;
 
     if (mpu9250_read_byte(m, REG_ACCEL_XOUT_H, &axh) == MPU9250_OK &&
@@ -122,35 +122,56 @@ mpu9250_status_t mpu9250_read_sensor(mpu9250_t *m, float *acc, float *gyro, floa
         mpu9250_read_byte(m, REG_ACCEL_YOUT_H, &ayh) == MPU9250_OK &&
         mpu9250_read_byte(m, REG_ACCEL_YOUT_L, &ayl) == MPU9250_OK &&
         mpu9250_read_byte(m, REG_ACCEL_ZOUT_H, &azh) == MPU9250_OK &&
-        mpu9250_read_byte(m, REG_ACCEL_ZOUT_L, &azl) == MPU9250_OK &&
-        mpu9250_read_byte(m, REG_GYRO_XOUT_H, &gxh) == MPU9250_OK &&
-        mpu9250_read_byte(m, REG_GYRO_XOUT_L, &gxl) == MPU9250_OK &&
-        mpu9250_read_byte(m, REG_GYRO_YOUT_H, &gyh) == MPU9250_OK &&
-        mpu9250_read_byte(m, REG_GYRO_YOUT_L, &gyl) == MPU9250_OK &&
-        mpu9250_read_byte(m, REG_GYRO_ZOUT_H, &gzh) == MPU9250_OK &&
-        mpu9250_read_byte(m, REG_GYRO_ZOUT_L, &gzl) == MPU9250_OK) {
-        ax = PACK_2(axh, axl);
-        ay = PACK_2(ayh, ayl);
-        az = PACK_2(azh, azl);
-        gx = PACK_2(gxh, gxl);
-        gy = PACK_2(gyh, gyl);
-        gz = PACK_2(gzh, gzl);
+        mpu9250_read_byte(m, REG_ACCEL_ZOUT_L, &azl) == MPU9250_OK) {
+        ax = (axh << 8) | axl;
+        ay = (ayh << 8) | ayl;
+        az = (azh << 8) | azl;
 
-        acc[0] = *(int16_t *)&ax * m->acc_resol;
-        acc[1] = *(int16_t *)&ay * m->acc_resol;
-        acc[2] = *(int16_t *)&az * m->acc_resol;
-
-        gyro[0] = *(int16_t *)&gx * m->gyro_resol;
-        gyro[1] = *(int16_t *)&gy * m->gyro_resol;
-        gyro[2] = *(int16_t *)&gz * m->gyro_resol;
-
-        // TODO: get mag.
-        UNUSED(mag);
+        acc[0] = to_signed_16(ax) * m->acc_resol;
+        acc[1] = to_signed_16(ay) * m->acc_resol;
+        acc[2] = to_signed_16(az) * m->acc_resol;
 
         res = MPU9250_OK;
     }
 
     return res;
+}
+
+mpu9250_status_t mpu9250_read_gyro(mpu9250_t *m, float *gyro) {
+    uint8_t gxh, gxl, gyh, gyl, gzh, gzl;
+    uint16_t gx, gy, gz;
+    mpu9250_status_t res = MPU9250_ERR;
+
+    if (mpu9250_read_byte(m, REG_GYRO_XOUT_H, &gxh) == MPU9250_OK &&
+        mpu9250_read_byte(m, REG_GYRO_XOUT_L, &gxl) == MPU9250_OK &&
+        mpu9250_read_byte(m, REG_GYRO_YOUT_H, &gyh) == MPU9250_OK &&
+        mpu9250_read_byte(m, REG_GYRO_YOUT_L, &gyl) == MPU9250_OK &&
+        mpu9250_read_byte(m, REG_GYRO_ZOUT_H, &gzh) == MPU9250_OK &&
+        mpu9250_read_byte(m, REG_GYRO_ZOUT_L, &gzl) == MPU9250_OK) {
+        gx = (gxh << 8) | gxl;
+        gy = (gyh << 8) | gyl;
+        gz = (gzh << 8) | gzl;
+
+        gyro[0] = to_signed_16(gx) * m->gyro_resol;
+        gyro[1] = to_signed_16(gy) * m->gyro_resol;
+        gyro[2] = to_signed_16(gz) * m->gyro_resol;
+
+        res = MPU9250_OK;
+    }
+
+    return res;
+}
+
+mpu9250_status_t mpu9250_read_mag(mpu9250_t *m, float *mag) {
+    // TODO: implement.
+
+    UNUSED(m);
+
+    mag[0] = 0.f;
+    mag[1] = 0.f;
+    mag[2] = 0.f;
+
+    return MPU9250_OK;
 }
 
 static mpu9250_status_t mpu9250_transmit(mpu9250_t *m, uint8_t *buf, uint32_t len) {
