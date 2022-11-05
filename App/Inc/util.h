@@ -24,6 +24,9 @@
 #define MIN(x, y) ((x) < (y) ? (x) : (y))
 #define MAX(x, y) ((x) > (y) ? (x) : (y))
 
+/* Inaccurate microsecond delay function. */
+void delay_us(uint32_t us);
+
 int16_t to_signed_16(uint16_t x);
 
 #endif

@@ -10,6 +10,11 @@ typedef struct {
     uint16_t nss_pin;
 
     uint8_t who_am_i;
+    uint8_t who_am_i_ak8963;
+
+    float xadj;
+    float yadj;
+    float zadj;
 
     float acc_resol;
     float gyro_resol;
@@ -43,6 +48,7 @@ mpu9250_status_t mpu9250_set_range(mpu9250_t *m, mpu9250_acc_range_t acc_range, 
 mpu9250_status_t mpu9250_read_acc(mpu9250_t *m, float *acc);
 /* Unit: rad/s. */
 mpu9250_status_t mpu9250_read_gyro(mpu9250_t *m, float *gyro);
+/* Unit: uT. */
 mpu9250_status_t mpu9250_read_mag(mpu9250_t *m, float *mag);
 
 #endif

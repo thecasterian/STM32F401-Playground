@@ -2,8 +2,22 @@
 #include "ahrs.h"
 #include "timer_wrapper.h"
 
+#define GYRO_BIAS_X -0.02060605f
+#define GYRO_BIAS_Y -0.00268946f
+#define GYRO_BIAS_Z -0.02197092f
+
+#define MAG_X_MAX  76.139702f
+#define MAG_X_MIN   3.460896f
+#define MAG_Y_MAX  40.802139f
+#define MAG_Y_MIN -39.527073f
+#define MAG_Z_MAX 203.973785f
+#define MAG_Z_MIN 100.664680f
+
+#define MAG_IIR_ALPHA 0.1f
+
 ahrs_status_t ahrs_init(ahrs_t *a, float dt, ahrs_read_t read_acc, void *aux_acc, ahrs_read_t read_gyro, void *aux_gyro,
                         ahrs_read_t read_mag, void *aux_mag) {
+    float dmag[3], davg;
     ahrs_status_t res = AHRS_ERR;
 
     if (dt > 0 && read_acc && read_gyro && read_mag) {
@@ -15,9 +29,25 @@ ahrs_status_t ahrs_init(ahrs_t *a, float dt, ahrs_read_t read_acc, void *aux_acc
         a->read_mag = read_mag;
         a->aux_mag = aux_mag;
 
-        a->alpha_acc = 0.1f;
-        a->alpha_gyro = 0.01f;
-        a->alpha_mag = 0.1f;
+        a->gyro_bias[0] = GYRO_BIAS_X;
+        a->gyro_bias[1] = GYRO_BIAS_Y;
+        a->gyro_bias[2] = GYRO_BIAS_Z;
+
+        a->mag_max[0] = MAG_X_MAX;
+        a->mag_max[1] = MAG_Y_MAX;
+        a->mag_max[2] = MAG_Z_MAX;
+        a->mag_min[0] = MAG_X_MIN;
+        a->mag_min[1] = MAG_Y_MIN;
+        a->mag_min[2] = MAG_Z_MIN;
+
+        for (int i = 0; i < 3; i++) {
+            a->mag_bias[i] = (a->mag_max[i] + a->mag_min[i]) / 2;
+            dmag[i] = (a->mag_max[i] - a->mag_min[i]) / 2.f;
+        }
+        davg = (dmag[0] + dmag[1] + dmag[2]) / 3.f;
+        for (int i = 0; i < 3; i++) {
+            a->mag_scale[i] = davg / dmag[i];
+        }
 
         res = AHRS_OK;
     }
@@ -25,86 +55,75 @@ ahrs_status_t ahrs_init(ahrs_t *a, float dt, ahrs_read_t read_acc, void *aux_acc
     return res;
 }
 
-ahrs_status_t ahrs_set_iir(ahrs_t *a, float alpha_acc, float alpha_gyro, float alpha_mag) {
-    ahrs_status_t res = AHRS_ERR;
-
-    if (alpha_acc > 0 && alpha_acc <= 1 && alpha_gyro > 0 && alpha_gyro <= 1 && alpha_mag > 0 && alpha_mag <= 1) {
-        a->alpha_acc = alpha_acc;
-        a->alpha_gyro = alpha_gyro;
-        a->alpha_mag = alpha_mag;
-
-        res = AHRS_OK;
-    }
-
-    return res;
-}
-
-ahrs_status_t ahrs_calibrate_acc_gyro(ahrs_t *a, uint16_t num_sample) {
+ahrs_status_t ahrs_init_attitude(ahrs_t *a, uint16_t num_sample) {
     float acc[3], acc_sum[3] = {0.f, 0.f, 0.f};
-    float gyro[3], gyro_sum[3] = {0.f, 0.f, 0.f};
+    float mag[3], mag_sum[3] = {0.f, 0.f, 0.f};
     float roll, pitch;
-    uint16_t i;
+    uint16_t cnt;
 
-    i = 0UL;
-    while (i < num_sample) {
+    cnt = 0UL;
+    while (cnt < num_sample) {
         if (timer.period_elapsed) {
-            if (a->read_acc(a->aux_acc, acc) == AHRS_OK && a->read_gyro(a->aux_gyro, gyro) == AHRS_OK) {
-                acc_sum[0] += acc[0];
-                acc_sum[1] += acc[1];
-                acc_sum[2] += acc[2];
+            if (a->read_acc(a->aux_acc, acc) == AHRS_OK && a->read_mag(a->aux_mag, mag) == AHRS_OK) {
+                for (int i = 0; i < 3; i++) {
+                    acc_sum[i] += acc[i];
+                    mag_sum[i] += mag[i];
+                }
 
-                gyro_sum[0] += gyro[0];
-                gyro_sum[1] += gyro[1];
-                gyro_sum[2] += gyro[2];
-
-                i++;
+                cnt++;
             }
 
             timer.period_elapsed = false;
         }
     }
 
-    a->gyro_bias[0] = gyro_sum[0] / num_sample;
-    a->gyro_bias[1] = gyro_sum[1] / num_sample;
-    a->gyro_bias[2] = gyro_sum[2] / num_sample;
-
-    /* Initial values of IIR-filtered acc and gyro. */
+    /* Initial values of accelerometer and magnetometer. */
     for (int i = 0; i < 3; i++) {
-        a->acc_iir[i] = acc_sum[i] / num_sample;
-        a->gyro_iir[i] = 0.f;
+        acc[i] = acc_sum[i] / num_sample;
+        a->mag_init[i] = mag_sum[i] / num_sample;
+        a->mag_iir[i] = a->mag_init[i];
     }
 
     /* Initial value of quaternion. */
-    roll = atan2f(a->acc_iir[1], a->acc_iir[2]);
-    pitch = atan2f(a->acc_iir[0], sqrtf(a->acc_iir[1] * a->acc_iir[1] + a->acc_iir[2] * a->acc_iir[2]));
+    roll = atan2f(acc[1], acc[2]);
+    pitch = atan2f(acc[0], sqrtf(acc[1] * acc[1] + acc[2] * acc[2]));
     quaternion_from_euler(&a->q, roll, pitch, 0.f);
 
     return AHRS_OK;
 }
 
 ahrs_status_t ahrs_update(ahrs_t *a) {
-    float acc[3], gyro[3];
+    float acc[3], gyro[3], mag[3];
     quaternion_t q_acc, q_gyro, q_tmp;
     float roll, pitch;
 
     a->read_acc(a->aux_acc, acc);
     a->read_gyro(a->aux_gyro, gyro);
+    a->read_mag(a->aux_mag, mag);
 
-    /* First-order IIR filter. */
+    /* Remove gyro bias. */
     for (int i = 0; i < 3; i++) {
-        a->acc_iir[i] = (1.f - a->alpha_acc) * a->acc_iir[i] + a->alpha_acc * acc[i];
-        a->gyro_iir[i] = (1.f - a->alpha_gyro) * a->gyro_iir[i] + a->alpha_gyro * gyro[i];
+        gyro[i] -= a->gyro_bias[i];
+    }
+
+    /* Hard and soft iron calibration. */
+    for (int i = 0; i < 3; i++) {
+        mag[i] = (mag[i] - a->mag_bias[i]) * a->mag_scale[i];
+    }
+    /* Apply IIR filter. */
+    for (int i = 0; i < 3; i++) {
+        a->mag_iir[i] = ((1.f - MAG_IIR_ALPHA) * a->mag_iir[i]) + (MAG_IIR_ALPHA * mag[i]);
     }
 
     /* Calculate quaternion with accelerometer. */
-    roll = atan2f(a->acc_iir[1], a->acc_iir[2]);
-    pitch = atan2f(a->acc_iir[0], sqrtf(a->acc_iir[1] * a->acc_iir[1] + a->acc_iir[2] * a->acc_iir[2]));
+    roll = atan2f(acc[1], acc[2]);
+    pitch = atan2f(acc[0], sqrtf(acc[1] * acc[1] + acc[2] * acc[2]));
     quaternion_from_euler(&q_acc, roll, pitch, 0.f);
 
     /* Calculate quaternion with gyro. */
-    q_tmp.x = a->gyro_iir[0];
-    q_tmp.y = a->gyro_iir[1];
-    q_tmp.z = a->gyro_iir[2];
+    q_tmp.x = gyro[0];
+    q_tmp.y = gyro[1];
+    q_tmp.z = gyro[2];
     q_tmp.w = 0.f;
 
     quaternion_mul(&a->q, &q_tmp, &q_tmp);

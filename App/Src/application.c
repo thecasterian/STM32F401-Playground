@@ -26,7 +26,7 @@ void setup(void) {
     mpu9250_init(&mpu9250, &hspi2, MPU9250_NSS_GPIO_Port, MPU9250_NSS_Pin);
     ahrs_init(&ahrs, PERIOD, read_acc, &mpu9250, read_gyro, &mpu9250, read_mag, &mpu9250);
 
-    ahrs_calibrate_acc_gyro(&ahrs, 1000U);
+    ahrs_init_attitude(&ahrs, 1000U);
 }
 
 void loop(void) {
