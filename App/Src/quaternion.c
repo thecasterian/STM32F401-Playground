@@ -8,6 +8,24 @@ void quaternion_init(quaternion_t *q, float x, float y, float z, float w) {
     q->w = w;
 }
 
+void quaternion_from_euler(quaternion_t *q, float roll, float pitch, float yaw)
+{
+    float cr, cp, cy, sr, sp, sy;
+
+    cr = cosf(roll / 2.f);
+    cp = cosf(pitch / 2.f);
+    cy = cosf(yaw / 2.f);
+
+    sr = sinf(roll / 2.f);
+    sp = sinf(pitch / 2.f);
+    sy = sinf(yaw / 2.f);
+
+    q->x = cr * sp * sy - sr * cp * cy;
+    q->y = -(cr * sp * cy + sr * cp * sy);
+    q->z = sr * sp * cy - cr * cp * sy;
+    q->w = cr * cp * cy + sr * sp * sy;
+}
+
 void quaternion_scale(const quaternion_t *q, float scale, quaternion_t *res) {
     quaternion_t tmp;
 

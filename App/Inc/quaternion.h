@@ -9,6 +9,7 @@ typedef struct {
 } quaternion_t;
 
 void quaternion_init(quaternion_t *q, float x, float y, float z, float w);
+void quaternion_from_euler(quaternion_t *q, float roll, float pitch, float yaw);
 
 void quaternion_scale(const quaternion_t *q, float scale, quaternion_t *res);
 void quaternion_normalize(const quaternion_t *q, quaternion_t *res);

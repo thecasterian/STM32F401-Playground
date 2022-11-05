@@ -1,3 +1,4 @@
+#include <math.h>
 #include "ahrs.h"
 #include "timer_wrapper.h"
 
@@ -41,6 +42,7 @@ ahrs_status_t ahrs_set_iir(ahrs_t *a, float alpha_acc, float alpha_gyro, float a
 ahrs_status_t ahrs_calibrate_acc_gyro(ahrs_t *a, uint16_t num_sample) {
     float acc[3], acc_sum[3] = {0.f, 0.f, 0.f};
     float gyro[3], gyro_sum[3] = {0.f, 0.f, 0.f};
+    float roll, pitch;
     uint16_t i;
 
     i = 0UL;
@@ -73,36 +75,45 @@ ahrs_status_t ahrs_calibrate_acc_gyro(ahrs_t *a, uint16_t num_sample) {
     }
 
     /* Initial value of quaternion. */
-    // TODO: calculate initial quaternion from acc.
-    quaternion_init(&a->q, 0.f, 0.f, 0.f, 1.f);
+    roll = atan2f(a->acc_iir[1], a->acc_iir[2]);
+    pitch = atan2f(a->acc_iir[0], sqrtf(a->acc_iir[1] * a->acc_iir[1] + a->acc_iir[2] * a->acc_iir[2]));
+    quaternion_from_euler(&a->q, roll, pitch, 0.f);
 
     return AHRS_OK;
 }
 
 ahrs_status_t ahrs_update(ahrs_t *a) {
-    float gyro[3];
-    quaternion_t q_gyro, q_tmp;
+    float acc[3], gyro[3];
+    quaternion_t q_acc, q_gyro, q_tmp;
+    float roll, pitch;
 
+    a->read_acc(a->aux_acc, acc);
     a->read_gyro(a->aux_gyro, gyro);
 
     /* First-order IIR filter. */
     for (int i = 0; i < 3; i++) {
-        a->gyro_iir[i] = (1.0f - a->alpha_gyro) * a->gyro_iir[i] + a->alpha_gyro * gyro[i];
+        a->acc_iir[i] = (1.f - a->alpha_acc) * a->acc_iir[i] + a->alpha_acc * acc[i];
+        a->gyro_iir[i] = (1.f - a->alpha_gyro) * a->gyro_iir[i] + a->alpha_gyro * gyro[i];
     }
 
-    /* Calculate attitude quaternion with gyro. */
+    /* Calculate quaternion with accelerometer. */
+    roll = atan2f(a->acc_iir[1], a->acc_iir[2]);
+    pitch = atan2f(a->acc_iir[0], sqrtf(a->acc_iir[1] * a->acc_iir[1] + a->acc_iir[2] * a->acc_iir[2]));
+    quaternion_from_euler(&q_acc, roll, pitch, 0.f);
+
+    /* Calculate quaternion with gyro. */
     q_tmp.x = a->gyro_iir[0];
     q_tmp.y = a->gyro_iir[1];
     q_tmp.z = a->gyro_iir[2];
     q_tmp.w = 0.f;
 
     quaternion_mul(&a->q, &q_tmp, &q_tmp);
-    quaternion_scale(&q_tmp, a->dt / 2.f, &q_tmp);
+    quaternion_scale(&q_tmp, -a->dt / 2.f, &q_tmp);
     quaternion_add(&a->q, &q_tmp, &q_gyro);
     quaternion_normalize(&q_gyro, &q_gyro);
 
     // TODO: implement Kalman filter.
-    a->q = q_gyro;
+    a->q = q_acc;
 
     return AHRS_OK;
 }
