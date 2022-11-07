@@ -24,6 +24,8 @@
 #define MIN(x, y) ((x) < (y) ? (x) : (y))
 #define MAX(x, y) ((x) > (y) ? (x) : (y))
 
+#define NORM_2(x, y) (sqrtf(((x) * (x)) + ((y) * (y))))
+
 /* Inaccurate microsecond delay function. */
 void delay_us(uint32_t us);
 

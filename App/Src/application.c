@@ -26,21 +26,23 @@ void setup(void) {
     mpu9250_init(&mpu9250, &hspi2, MPU9250_NSS_GPIO_Port, MPU9250_NSS_Pin);
     ahrs_init(&ahrs, PERIOD, read_acc, &mpu9250, read_gyro, &mpu9250, read_mag, &mpu9250);
 
-    ahrs_init_attitude(&ahrs, 1000U);
+    ahrs_init_attitude(&ahrs, 500U);
 }
 
 void loop(void) {
-    quaternion_t q;
-    uint8_t dat[17];
+    float rpy_acc_mag[3], rpy_gyro[3];
+    uint8_t buf[25];
 
     if (timer.period_elapsed) {
         ahrs_update(&ahrs);
-        ahrs_get_quaternion(&ahrs, &q);
 
-        dat[0] = 0x42;
-        (void)memcpy(&dat[1], &q, sizeof(q));
+        quaternion_to_euler(&ahrs.q_acc_mag, &rpy_acc_mag[0], &rpy_acc_mag[1], &rpy_acc_mag[2]);
+        quaternion_to_euler(&ahrs.q_gyro, &rpy_gyro[0], &rpy_gyro[1], &rpy_gyro[2]);
 
-        (void)_write(0, (char *)dat, sizeof(dat));
+        buf[0] = 0x42;
+        memcpy(&buf[1], rpy_acc_mag, sizeof(rpy_acc_mag));
+        memcpy(&buf[13], rpy_gyro, sizeof(rpy_gyro));
+        _write(0, buf, sizeof(buf));
 
         timer.period_elapsed = false;
     }

@@ -1,6 +1,7 @@
 #include <math.h>
 #include "ahrs.h"
 #include "timer_wrapper.h"
+#include "util.h"
 
 #define GYRO_BIAS_X -0.02060605f
 #define GYRO_BIAS_Y -0.00268946f
@@ -13,7 +14,7 @@
 #define MAG_Z_MAX 203.973785f
 #define MAG_Z_MIN 100.664680f
 
-#define MAG_IIR_ALPHA 0.1f
+#define MAG_IIR_ALPHA 0.5f
 
 ahrs_status_t ahrs_init(ahrs_t *a, float dt, ahrs_read_t read_acc, void *aux_acc, ahrs_read_t read_gyro, void *aux_gyro,
                         ahrs_read_t read_mag, void *aux_mag) {
@@ -67,7 +68,7 @@ ahrs_status_t ahrs_init_attitude(ahrs_t *a, uint16_t num_sample) {
             if (a->read_acc(a->aux_acc, acc) == AHRS_OK && a->read_mag(a->aux_mag, mag) == AHRS_OK) {
                 for (int i = 0; i < 3; i++) {
                     acc_sum[i] += acc[i];
-                    mag_sum[i] += mag[i];
+                    mag_sum[i] += (mag[i] - a->mag_bias[i]) * a->mag_scale[i];
                 }
 
                 cnt++;
@@ -80,22 +81,27 @@ ahrs_status_t ahrs_init_attitude(ahrs_t *a, uint16_t num_sample) {
     /* Initial values of accelerometer and magnetometer. */
     for (int i = 0; i < 3; i++) {
         acc[i] = acc_sum[i] / num_sample;
-        a->mag_init[i] = mag_sum[i] / num_sample;
-        a->mag_iir[i] = a->mag_init[i];
+        a->mag_iir[i] = mag_sum[i] / num_sample;
     }
 
     /* Initial value of quaternion. */
-    roll = atan2f(acc[1], acc[2]);
-    pitch = atan2f(acc[0], sqrtf(acc[1] * acc[1] + acc[2] * acc[2]));
-    quaternion_from_euler(&a->q, roll, pitch, 0.f);
+    roll = atan2f(-acc[1], -acc[2]);
+    pitch = atan2f(acc[0], NORM_2(acc[1], acc[2]));
+    quaternion_from_euler(&a->q_acc_mag, roll, pitch, 0.f);
+    a->q_gyro = a->q_acc_mag;
+    a->q_kalman = a->q_acc_mag;
+
+    /* Magnetic field in inertial frame. */
+    quaternion_rot_vec_inv(&a->q_acc_mag, a->mag_iir, a->mag_inert);
 
     return AHRS_OK;
 }
 
 ahrs_status_t ahrs_update(ahrs_t *a) {
     float acc[3], gyro[3], mag[3];
-    quaternion_t q_acc, q_gyro, q_tmp;
+    quaternion_t q_acc, q_tmp;
     float roll, pitch;
+    float mag_acc[3], yaw, mag_inert_norm, mag_acc_norm, cy;
 
     a->read_acc(a->aux_acc, acc);
     a->read_gyro(a->aux_gyro, gyro);
@@ -115,30 +121,28 @@ ahrs_status_t ahrs_update(ahrs_t *a) {
         a->mag_iir[i] = ((1.f - MAG_IIR_ALPHA) * a->mag_iir[i]) + (MAG_IIR_ALPHA * mag[i]);
     }
 
-    /* Calculate quaternion with accelerometer. */
-    roll = atan2f(acc[1], acc[2]);
-    pitch = atan2f(acc[0], sqrtf(acc[1] * acc[1] + acc[2] * acc[2]));
+    /* Calculate quaternion with accelerometer and magnetometer. */
+    roll = atan2f(-acc[1], -acc[2]);
+    pitch = atan2f(acc[0], NORM_2(acc[1], acc[2]));
     quaternion_from_euler(&q_acc, roll, pitch, 0.f);
 
-    /* Calculate quaternion with gyro. */
-    q_tmp.x = gyro[0];
-    q_tmp.y = gyro[1];
-    q_tmp.z = gyro[2];
-    q_tmp.w = 0.f;
+    quaternion_rot_vec_inv(&q_acc, a->mag_iir, mag_acc);
+    mag_inert_norm = NORM_2(a->mag_inert[0], a->mag_inert[1]);
+    mag_acc_norm = NORM_2(mag_acc[0], mag_acc[1]);
+    cy = ((a->mag_inert[0] * mag_acc[0]) + (a->mag_inert[1] * mag_acc[1])) / (mag_inert_norm * mag_acc_norm);
+    yaw = acosf(cy);
+    if (a->mag_inert[0] * mag_acc[1] - a->mag_inert[1] * mag_acc[0] > 0.f) {
+        yaw = -yaw;
+    }
 
-    quaternion_mul(&a->q, &q_tmp, &q_tmp);
-    quaternion_scale(&q_tmp, -a->dt / 2.f, &q_tmp);
-    quaternion_add(&a->q, &q_tmp, &q_gyro);
-    quaternion_normalize(&q_gyro, &q_gyro);
+    quaternion_from_euler(&q_tmp, 0.f, 0.f, yaw);
+    quaternion_mul(&q_acc, &q_tmp, &a->q_acc_mag);
+
+    /* Calculate quaternion with gyro. */
+    quaternion_init(&q_tmp, -a->dt / 2.f * gyro[0], -a->dt / 2.f * gyro[1], -a->dt / 2.f * gyro[2], 1.f);
+    quaternion_mul(&a->q_gyro, &q_tmp, &a->q_gyro);
 
     // TODO: implement Kalman filter.
-    a->q = q_acc;
-
-    return AHRS_OK;
-}
-
-ahrs_status_t ahrs_get_quaternion(ahrs_t *a, quaternion_t *q) {
-    *q = a->q;
 
     return AHRS_OK;
 }

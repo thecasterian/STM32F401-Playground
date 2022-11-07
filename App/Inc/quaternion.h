@@ -17,4 +17,8 @@ void quaternion_normalize(const quaternion_t *q, quaternion_t *res);
 void quaternion_add(const quaternion_t *q1, const quaternion_t *q2, quaternion_t *res);
 void quaternion_mul(const quaternion_t *q1, const quaternion_t *q2, quaternion_t *res);
 
+void quaternion_rot_vec(const quaternion_t *q, const float *vec, float *res);
+void quaternion_rot_vec_inv(const quaternion_t *q, const float *vec, float *res);
+void quaternion_to_euler(const quaternion_t *q, float *roll, float *pitch, float *yaw);
+
 #endif
