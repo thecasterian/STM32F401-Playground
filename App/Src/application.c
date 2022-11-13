@@ -26,7 +26,7 @@ void setup(void) {
     mpu9250_init(&mpu9250, &hspi2, MPU9250_NSS_GPIO_Port, MPU9250_NSS_Pin);
     ahrs_init(&ahrs, PERIOD, read_acc, &mpu9250, read_gyro, &mpu9250, read_mag, &mpu9250);
 
-    ahrs_init_attitude(&ahrs, 500U);
+    ahrs_init_attitude(&ahrs, 1000U);
 }
 
 void loop(void) {
@@ -42,7 +42,7 @@ void loop(void) {
         buf[0] = 0x42;
         memcpy(&buf[1], rpy_acc_mag, sizeof(rpy_acc_mag));
         memcpy(&buf[13], rpy_gyro, sizeof(rpy_gyro));
-        _write(0, buf, sizeof(buf));
+        _write(0, (char *)buf, sizeof(buf));
 
         timer.period_elapsed = false;
     }

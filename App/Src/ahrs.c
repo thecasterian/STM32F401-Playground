@@ -137,10 +137,12 @@ ahrs_status_t ahrs_update(ahrs_t *a) {
 
     quaternion_from_euler(&q_tmp, 0.f, 0.f, yaw);
     quaternion_mul(&q_acc, &q_tmp, &a->q_acc_mag);
+    quaternion_normalize(&a->q_acc_mag, &a->q_acc_mag);
 
     /* Calculate quaternion with gyro. */
-    quaternion_init(&q_tmp, -a->dt / 2.f * gyro[0], -a->dt / 2.f * gyro[1], -a->dt / 2.f * gyro[2], 1.f);
-    quaternion_mul(&a->q_gyro, &q_tmp, &a->q_gyro);
+    quaternion_init(&q_tmp, 1.f, -a->dt / 2.f * gyro[0], -a->dt / 2.f * gyro[1], -a->dt / 2.f * gyro[2]);
+    quaternion_mul(&q_tmp, &a->q_gyro, &a->q_gyro);
+    quaternion_normalize(&a->q_gyro, &a->q_gyro);
 
     // TODO: implement Kalman filter.
 
