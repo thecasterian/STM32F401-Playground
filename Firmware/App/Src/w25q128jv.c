@@ -130,15 +130,13 @@ w25q128jv_status_t w25q128jv_write(w25q128jv_t *w, uint32_t addr, uint8_t *buf, 
 }
 
 w25q128jv_status_t w25q128jv_erase_sector(w25q128jv_t *w, uint32_t addr, uint32_t len) {
-    uint32_t cur_addr;
     w25q128jv_status_t res = W25Q128JV_OK;
 
     if ((addr & SECTOR_MASK) == 0 && (len % SECTOR_SIZE) == 0)
         for (uint32_t i = 0; i < len / SECTOR_SIZE; i++) {
             if (w25q128jv_wait_busy(w) == W25Q128JV_OK && w25q128jv_write_enable(w) == W25Q128JV_OK) {
+                uint32_t cur_addr = addr + i * SECTOR_SIZE;
                 uint8_t tx_buf[4] = {INST_SECTOR_ERASE, BYTE_2(cur_addr), BYTE_1(cur_addr), BYTE_0(cur_addr)};
-
-                cur_addr = addr + i * SECTOR_SIZE;
 
                 nss_low(w);
                 if (w25q128jv_transmit(w, tx_buf, sizeof(tx_buf)) != W25Q128JV_OK)

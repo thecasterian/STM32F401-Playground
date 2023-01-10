@@ -1,11 +1,11 @@
 import numpy as np
 import matplotlib.pyplot as plt
 
-a = np.loadtxt('mag_cal.txt', delimiter=',', skiprows=1)
+a = np.loadtxt('mag_cal3.txt', delimiter=',', skiprows=1)
 mag = []
 
 for x, y, z in a:
-    if x > 80 or y > 80 or z > 210:
+    if x > 87 or x < 1 or y < -30 or z < -30:
         continue
     mag.append([x, y, z])
 mag = np.array(mag)

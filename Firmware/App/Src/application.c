@@ -7,9 +7,8 @@
 #include "quaternion.h"
 #include "usart.h"
 
-#define PERIOD 0.001f
+#define PERIOD 0.002f
 
-static w25q128jv_t w25q128jv;
 static mpu9250_t mpu9250;
 static ahrs_t ahrs;
 
@@ -20,9 +19,8 @@ static ahrs_status_t read_gyro(void *aux, float *data);
 static ahrs_status_t read_mag(void *aux, float *data);
 
 void setup(void) {
-    timer_start(&timer);
+    timer_start();
 
-    w25q128jv_init(&w25q128jv, &hspi1, W25Q128JV_NSS_GPIO_Port, W25Q128JV_NSS_Pin);
     mpu9250_init(&mpu9250, &hspi2, MPU9250_NSS_GPIO_Port, MPU9250_NSS_Pin);
     ahrs_init(&ahrs, PERIOD, read_acc, &mpu9250, read_gyro, &mpu9250, read_mag, &mpu9250);
 
@@ -30,18 +28,17 @@ void setup(void) {
 }
 
 void loop(void) {
-    float rpy_acc_mag[3], rpy_gyro[3];
-    uint8_t buf[25];
+    float roll, pitch, yaw;
+    uint8_t buf[13];
 
     if (timer.period_elapsed) {
         ahrs_update(&ahrs);
 
-        quaternion_to_euler(&ahrs.q_acc_mag, &rpy_acc_mag[0], &rpy_acc_mag[1], &rpy_acc_mag[2]);
-        quaternion_to_euler(&ahrs.q_gyro, &rpy_gyro[0], &rpy_gyro[1], &rpy_gyro[2]);
-
+        quaternion_to_euler(&ahrs.q, &roll, &pitch, &yaw);
         buf[0] = 0x42;
-        memcpy(&buf[1], rpy_acc_mag, sizeof(rpy_acc_mag));
-        memcpy(&buf[13], rpy_gyro, sizeof(rpy_gyro));
+        memcpy(&buf[1], &roll, sizeof(roll));
+        memcpy(&buf[5], &pitch, sizeof(pitch));
+        memcpy(&buf[9], &yaw, sizeof(yaw));
         _write(0, (char *)buf, sizeof(buf));
 
         timer.period_elapsed = false;

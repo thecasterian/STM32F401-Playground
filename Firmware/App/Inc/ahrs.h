@@ -2,6 +2,7 @@
 #define AHRS_H
 
 #include <stdint.h>
+#include "matrix.h"
 #include "quaternion.h"
 
 typedef enum {
@@ -16,11 +17,9 @@ typedef struct {
     ahrs_read_t read_acc, read_gyro, read_mag;
     void *aux_acc, *aux_gyro, *aux_mag;
 
-    quaternion_t q_acc_mag;                     /* Quaternion from accelerometer and magnetometer. */
-    quaternion_t q_gyro;                        /* Quaternion from gyro. */
-    quaternion_t q_kalman;                      /* Quaternion from Kalman filter. */
+    quaternion_t q;                             /* Quaternion from body frame to inertial frame. */
+    matrix_t P;                                 /* Covariance matrix. */
 
-    float mag_iir[3];                           /* IIR-filtered magnetic field. */
     float mag_inert[3];                         /* Magnetic field in inertial frame. */
 
     float gyro_bias[3];

@@ -3,12 +3,10 @@
 
 Timer timer;
 
-void timer_start(Timer *t) {
+void timer_start(void) {
     HAL_TIM_Base_Start_IT(&htim5);
 }
 
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim) {
-    if (htim->Instance == TIM5) {
-        timer.period_elapsed = true;
-    }
+    timer.period_elapsed = true;
 }
